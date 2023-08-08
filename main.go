@@ -6,48 +6,36 @@ import (
 	"git.sr.ht/~justinsantoro/gemtext/ast"
 	"io"
 	"os"
-	"strings"
 )
 
-func line2html(line ast.Line) string {
+func line2html(line ast.Line) (string, bool) {
 	switch v := line.(type) {
 	case *ast.EmptyLine:
-		return "<br/>"
+		return "<br/>", false
 	case *ast.Text:
-		return fmt.Sprintf("<p>%s</p>", string(v.Bytes()))
+		return fmt.Sprintf("<p>%s</p>", string(v.Bytes())), false
 	case *ast.Link:
 		label := v.Label
 		if label == "" {
 			label = v.Url
 		}
-		return fmt.Sprintf(`<p><a href="%s">%s</a></p>`, v.Url, label)
+		return fmt.Sprintf(`<p><a href="%s">%s</a></p>`, v.Url, label), false
 	case *ast.Heading:
 		if v.Level == 1 {
-			return fmt.Sprintf("<h1>%s</h1>", string(v.Bytes()))
+			return fmt.Sprintf("<h1>%s</h1>", string(v.Bytes())), false
 		} else if v.Level == 2 {
-			return fmt.Sprintf("<h2>%s</h2>", string(v.Bytes()))
+			return fmt.Sprintf("<h2>%s</h2>", string(v.Bytes())), false
 		} else {
-			return fmt.Sprintf("<h3>%s</h3>", string(v.Bytes()))
+			return fmt.Sprintf("<h3>%s</h3>", string(v.Bytes())), false
 		}
 	case *ast.ListItem:
-		panic("shoudld be here")
+		return fmt.Sprintf("    <li>%s</li>", string(v.Bytes())), true
 	case *ast.Blockquote:
-		return fmt.Sprintf("<blockquote><p>%s</p></blockquote>", string(v.Bytes()))
+		return fmt.Sprintf("<blockquote><p>%s</p></blockquote>", string(v.Bytes())), false
 	case *ast.Preformatted:
-		return fmt.Sprintf("<pre>%s</pre>", string(v.Bytes()))
+		return fmt.Sprintf("<pre>%s</pre>", string(v.Bytes())), false
 	}
-	return ""
-}
-
-func listLines2html(items []ast.Line) string {
-	var b strings.Builder
-	b.WriteString("<ul>\n")
-	for _, l := range items {
-		itemText := fmt.Sprintf("    <li>%s</li>\n", string(l.Bytes()))
-		b.WriteString(itemText)
-	}
-	b.WriteString("</ul>")
-	return b.String()
+	return "", false
 }
 
 func main() {
@@ -64,7 +52,7 @@ func main() {
 	}
 
 	lines := gemtext.Parse(text)
-	// TODO: title
+	// TODO: use first level 1 heading as title
 	fmt.Println(`<!DOCTYPE html>
 	<html>
 	  <head>
@@ -76,25 +64,17 @@ func main() {
 		</head>
 	  <body>`)
 
-	i := 0
-	for i < len(lines) {
-		_, isItem := lines[i].(*ast.ListItem)
-		if isItem {
-			start := i
-			i++
-			for i < len(lines) {
-				_, isItem = lines[i].(*ast.ListItem)
-				if !isItem {
-					break
-				}
-				i++
-			}
-
-			fmt.Println(listLines2html(lines[start:i]))
-		} else {
-			fmt.Println(line2html(lines[i]))
-			i++
+	inList := false
+	for _, line := range lines {
+		text, isItem := line2html(line)
+		// entering and leaving a list
+		if !inList && isItem {
+			fmt.Println("<ul>")
+		} else if inList && !isItem {
+			fmt.Println("</ul>")
 		}
+		fmt.Println(text)
+		inList = isItem
 	}
 
 	fmt.Println("</body></html>")
