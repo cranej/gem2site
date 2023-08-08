@@ -2,6 +2,7 @@
 
 => http://lin1.com
 => http://link2.com link2
+=> /en/posts/hello-2023-08-08.gmi GemLog
 
 line 1
 line 2
