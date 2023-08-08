@@ -7,13 +7,17 @@ import (
 	"html/template"
 	"io"
 	"os"
+	"path"
+	"path/filepath"
 	"strings"
 )
 
+const GMI_EXT string = ".gmi"
+
 // "/en/posts/xxxxx.gmi" -> "/en/posts/xxxxx.html"
 func urlReplace(link *ast.Link) {
-	if strings.HasPrefix(link.Url, "/") && strings.HasSuffix(link.Url, ".gmi") {
-		link.Url = strings.TrimSuffix(link.Url, ".gmi") + ".html"
+	if strings.HasPrefix(link.Url, "/") && strings.HasSuffix(link.Url, GMI_EXT) {
+		link.Url = strings.TrimSuffix(link.Url, GMI_EXT) + ".html"
 	}
 }
 
@@ -48,8 +52,24 @@ func line2html(line ast.Line) (string, bool) {
 	return "", false
 }
 
-func main() {
-	in, err := os.Open(os.Args[1])
+func outputPage(p string, content string) error {
+	err := os.MkdirAll(filepath.Dir(p), 0755)
+	if err != nil {
+		fmt.Println("failed to create dir", err)
+		os.Exit(1)
+	}
+	file, err := os.Create(p)
+	if err != nil {
+		fmt.Println("failed to write", p, err)
+		os.Exit(1)
+	}
+
+	file.WriteString(content)
+	return nil
+}
+
+func processPage(p string) string {
+	in, err := os.Open(p)
 	if err != nil {
 		fmt.Println("Error open file:", err)
 		os.Exit(1)
@@ -61,13 +81,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	if path.Ext(p) != GMI_EXT {
+		return string(text)
+	}
+
 	lines := gemtext.Parse(text)
 	tmpl, err := template.New("page").Parse(`<!DOCTYPE html>
 	<html>
 	  <head>
 	  	<meta name="generator" content="gem2site">
 		<meta charset="utf-8">
-    	<link href="./site.css" rel="stylesheet"/>
+    	<link href="/site.css" rel="stylesheet"/>
 		<title>
 		{{ .Title }}
 		</title>
@@ -127,5 +151,28 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println(page.String())
+	return page.String()
+}
+
+func main() {
+	src := os.Args[1]
+	dest := os.Args[2]
+
+	os.RemoveAll(dest)
+
+	filepath.Walk(src, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			rel, _ := filepath.Rel(src, p)
+			out := filepath.Join(dest, rel)
+			if path.Ext(out) == GMI_EXT {
+				out = strings.TrimSuffix(out, GMI_EXT) + ".html"
+			}
+			content := processPage(p)
+			outputPage(out, content)
+		}
+		return nil
+	})
 }
