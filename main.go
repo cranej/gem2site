@@ -24,7 +24,7 @@ func urlReplace(link *ast.Link) {
 func line2html(line ast.Line) (string, bool) {
 	switch v := line.(type) {
 	case *ast.EmptyLine:
-		return "<br/>", false
+		return `<div class="empty-line"></div>`, false
 	case *ast.Text:
 		return fmt.Sprintf("<p>%s</p>", string(v.Bytes())), false
 	case *ast.Link:
@@ -91,6 +91,13 @@ func processPage(p string) string {
 	  <head>
 	  	<meta name="generator" content="gem2site">
 		<meta charset="utf-8">
+		<style>
+			div.empty-line {
+				height: 0.5em;
+				margin:0;
+				padding:0;
+			}
+		</style>
     	<link href="/site.css" rel="stylesheet"/>
 		<title>
 		{{ .Title }}
