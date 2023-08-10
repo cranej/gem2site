@@ -28,10 +28,11 @@ my_site
 * Other files are copied intact
 
 ## Status
-I'm already using it for my persoal site, but there are still some work to do.
+I'm already using it for my personal site, but there are still some work to do.
 
 ## TODOs
-[ ] Customizable template
-  [ ] embed a default template
-  [ ] option to dump default template
-  [ ] option to specify template to use
+- [ ] Customizable template
+    - [ ] embed a default template
+    - [ ] option to dump default template
+    - [ ] option to specify template to use
+- [ ] optional convert image/video/audio links to corresponding html tags
