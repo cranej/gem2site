@@ -31,8 +31,9 @@ my_site
 I'm already using it for my personal site, but there are still some work to do.
 
 ## TODOs
-- [ ] Customizable template
-    - [ ] embed a default template
-    - [ ] option to dump default template
-    - [ ] option to specify template to use
+- [x] Customizable template
+    - [x] embed a default template
+    - [x] option to dump default template
+    - [x] option to specify template to use
+    - [x] option to specify external css link
 - [ ] optional convert image/video/audio links to corresponding html tags

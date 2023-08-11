@@ -80,10 +80,15 @@ const defaultTemplate string = `<!DOCTYPE html>
         padding:0;
       }
     </style>
-      <link href="/site.css" rel="stylesheet"/>
-    <title>
-    {{ .Title }}
-    </title>
+	{{ if .ExternalCssFile }}
+      <link href="{{.ExternalCssFile}}" rel="stylesheet"/>
+	{{ else }}
+    <style>
+	{{ .DefaultCss }}
+	</style>
+	{{ end }}
+
+    <title>{{ .Title }}</title>
   </head>
   <body>
     <main>
@@ -94,7 +99,41 @@ const defaultTemplate string = `<!DOCTYPE html>
   </body>
 </html>`
 
-func processFile(p string, tmplString string) []byte {
+const defaultCss string = `html {
+  font-size: 18px;
+}
+body {
+  color: #171717;
+  font-family: 'Garamond', Georgia, serif, 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji';
+}
+
+article {
+  margin: 0 auto;
+  max-width: 720px;
+  line-height: 1.3;
+}
+
+h1,h2,h3 {
+  color: #ba3925;
+  text-rendering: optimizeLegibility;
+  font-family: "Open Sans", sans-serif;
+}
+
+pre {
+  background-color: #eee;
+  padding: .25rem 0.5rem;
+  margin: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+p {
+  text-align: justify;
+  margin: 0.25rem;
+}
+`
+
+func processFile(p string, tmplString string, externalCssFile string) []byte {
 	bytes, err := os.ReadFile(p)
 	if err != nil {
 		fmt.Println("Error read file:", err)
@@ -141,11 +180,15 @@ func processFile(p string, tmplString string) []byte {
 
 	var page strings.Builder
 	data := struct {
-		Title   string
-		Content template.HTML
+		Title           string
+		Content         template.HTML
+		ExternalCssFile string
+		DefaultCss      template.CSS
 	}{
-		Title:   title,
-		Content: template.HTML(content.String()),
+		Title:           title,
+		Content:         template.HTML(content.String()),
+		ExternalCssFile: externalCssFile,
+		DefaultCss:      template.CSS(defaultCss),
 	}
 
 	err = tmpl.Execute(&page, data)
@@ -157,13 +200,16 @@ func processFile(p string, tmplString string) []byte {
 	return []byte(page.String())
 }
 
-var customTmpl = flag.String("tmpl", "", "path of alternative template to use")
-var dumpTmpl = flag.Bool("dump", false, "print the default template and exit")
+var externalTmpl = flag.String("tmpl", "", "path of external template file")
+var externalCss = flag.String("css", "", "value of href of <link> element")
+var dumpTmpl = flag.Bool("dump", false, "print default template and css, then exit")
 
 func main() {
 	flag.Parse()
 	if *dumpTmpl {
 		fmt.Println(defaultTemplate)
+		fmt.Println()
+		fmt.Println(defaultCss)
 		return
 	}
 
@@ -172,12 +218,12 @@ func main() {
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
-	src := flag.Arg(1)
-	dest := flag.Arg(2)
+	src := flag.Arg(0)
+	dest := flag.Arg(1)
 
 	tmpl := defaultTemplate
-	if *customTmpl != "" {
-		tmplBytes, err := os.ReadFile(*customTmpl)
+	if *externalTmpl != "" {
+		tmplBytes, err := os.ReadFile(*externalTmpl)
 		if err != nil {
 			fmt.Println("Cannot read alternative template: ", err)
 			os.Exit(1)
@@ -186,7 +232,6 @@ func main() {
 	}
 
 	os.RemoveAll(dest)
-
 	filepath.Walk(src, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -197,7 +242,7 @@ func main() {
 			if path.Ext(out) == GMI_EXT {
 				out = strings.TrimSuffix(out, GMI_EXT) + ".html"
 			}
-			content := processFile(p, tmpl)
+			content := processFile(p, tmpl, *externalCss)
 			outputFile(out, content)
 		}
 		return nil
