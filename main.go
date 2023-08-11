@@ -1,11 +1,11 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"git.sr.ht/~justinsantoro/gemtext"
 	"git.sr.ht/~justinsantoro/gemtext/ast"
 	"html/template"
-	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -52,7 +52,7 @@ func line2html(line ast.Line) (string, bool) {
 	return "", false
 }
 
-func outputPage(p string, content string) error {
+func outputFile(p string, content []byte) error {
 	err := os.MkdirAll(filepath.Dir(p), 0755)
 	if err != nil {
 		fmt.Println("failed to create dir", err)
@@ -64,53 +64,49 @@ func outputPage(p string, content string) error {
 		os.Exit(1)
 	}
 
-	file.WriteString(content)
+	file.Write(content)
 	return nil
 }
 
-func processPage(p string) string {
-	in, err := os.Open(p)
-	if err != nil {
-		fmt.Println("Error open file:", err)
-		os.Exit(1)
-	}
+const defaultTemplate string = `<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="generator" content="gem2site">
+    <meta charset="utf-8">
+    <style>
+      div.empty-line {
+        height: 0.5em;
+        margin:0;
+        padding:0;
+      }
+    </style>
+      <link href="/site.css" rel="stylesheet"/>
+    <title>
+    {{ .Title }}
+    </title>
+  </head>
+  <body>
+    <main>
+      <article>
+        {{ .Content }}
+      </article>
+    </main>
+  </body>
+</html>`
 
-	text, err := io.ReadAll(in)
+func processFile(p string, tmplString string) []byte {
+	bytes, err := os.ReadFile(p)
 	if err != nil {
 		fmt.Println("Error read file:", err)
 		os.Exit(1)
 	}
 
 	if path.Ext(p) != GMI_EXT {
-		return string(text)
+		return bytes
 	}
 
-	lines := gemtext.Parse(text)
-	tmpl, err := template.New("page").Parse(`<!DOCTYPE html>
-	<html>
-	  <head>
-	  	<meta name="generator" content="gem2site">
-		<meta charset="utf-8">
-		<style>
-			div.empty-line {
-				height: 0.5em;
-				margin:0;
-				padding:0;
-			}
-		</style>
-    	<link href="/site.css" rel="stylesheet"/>
-		<title>
-		{{ .Title }}
-		</title>
-		</head>
-	  <body>
-	  	<main>
-		<article>
-	  	{{ .Content }}
-		</article>
-		</main>
-	  </body>
-	</html>`)
+	lines := gemtext.Parse(bytes)
+	tmpl, err := template.New("page").Parse(tmplString)
 	if err != nil {
 		fmt.Println("Error parsing template:", err)
 		os.Exit(1)
@@ -158,12 +154,36 @@ func processPage(p string) string {
 		os.Exit(1)
 	}
 
-	return page.String()
+	return []byte(page.String())
 }
 
+var customTmpl = flag.String("tmpl", "", "path of alternative template to use")
+var dumpTmpl = flag.Bool("dump", false, "print the default template and exit")
+
 func main() {
-	src := os.Args[1]
-	dest := os.Args[2]
+	flag.Parse()
+	if *dumpTmpl {
+		fmt.Println(defaultTemplate)
+		return
+	}
+
+	if flag.NArg() != 2 {
+		fmt.Printf("Usage: %s [flags] <source> <dest>\n", os.Args[0])
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+	src := flag.Arg(1)
+	dest := flag.Arg(2)
+
+	tmpl := defaultTemplate
+	if *customTmpl != "" {
+		tmplBytes, err := os.ReadFile(*customTmpl)
+		if err != nil {
+			fmt.Println("Cannot read alternative template: ", err)
+			os.Exit(1)
+		}
+		tmpl = string(tmplBytes)
+	}
 
 	os.RemoveAll(dest)
 
@@ -177,8 +197,8 @@ func main() {
 			if path.Ext(out) == GMI_EXT {
 				out = strings.TrimSuffix(out, GMI_EXT) + ".html"
 			}
-			content := processPage(p)
-			outputPage(out, content)
+			content := processFile(p, tmpl)
+			outputFile(out, content)
 		}
 		return nil
 	})
