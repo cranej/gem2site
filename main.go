@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"git.sr.ht/~justinsantoro/gemtext"
 	"git.sr.ht/~justinsantoro/gemtext/ast"
+	"github.com/alecthomas/chroma/v2/quick"
 	"html/template"
 	"os"
 	"path"
@@ -13,6 +14,7 @@ import (
 )
 
 const GMI_EXT string = ".gmi"
+const HL_STYLE string = "github"
 
 // "/en/posts/xxxxx.gmi" -> "/en/posts/xxxxx.html"
 func urlReplace(link *ast.Link) {
@@ -21,33 +23,46 @@ func urlReplace(link *ast.Link) {
 	}
 }
 
+func es(text string) string {
+	return template.HTMLEscapeString(text)
+}
+
 func line2html(line ast.Line) (string, bool) {
 	switch v := line.(type) {
 	case *ast.EmptyLine:
 		return `<div class="empty-line"></div>`, false
 	case *ast.Text:
-		return fmt.Sprintf("<p>%s</p>", string(v.Bytes())), false
+		return fmt.Sprintf("<p>%s</p>", es(string(v.Bytes()))), false
 	case *ast.Link:
 		urlReplace(v)
 		label := v.Label
 		if label == "" {
 			label = v.Url
 		}
-		return fmt.Sprintf(`<p><a href="%s">%s</a></p>`, v.Url, label), false
+		return fmt.Sprintf(`<p><a href="%s">%s</a></p>`, v.Url, es(label)), false
 	case *ast.Heading:
 		if v.Level == 1 {
-			return fmt.Sprintf("<h1>%s</h1>", string(v.Bytes())), false
+			return fmt.Sprintf("<h1>%s</h1>", es(string(v.Bytes()))), false
 		} else if v.Level == 2 {
-			return fmt.Sprintf("<h2>%s</h2>", string(v.Bytes())), false
+			return fmt.Sprintf("<h2>%s</h2>", es(string(v.Bytes()))), false
 		} else {
-			return fmt.Sprintf("<h3>%s</h3>", string(v.Bytes())), false
+			return fmt.Sprintf("<h3>%s</h3>", es(string(v.Bytes()))), false
 		}
 	case *ast.ListItem:
-		return fmt.Sprintf("    <li>%s</li>", string(v.Bytes())), true
+		return fmt.Sprintf("    <li>%s</li>", es(string(v.Bytes()))), true
 	case *ast.Blockquote:
-		return fmt.Sprintf("<blockquote><p>%s</p></blockquote>", string(v.Bytes())), false
+		return fmt.Sprintf("<blockquote><p>%s</p></blockquote>", es(string(v.Bytes()))), false
 	case *ast.Preformatted:
-		return fmt.Sprintf("<pre>%s</pre>", string(v.Bytes())), false
+		preText := string(v.Bytes())
+		if alt := v.AltText; alt != "" {
+			var code strings.Builder
+			err := quick.Highlight(&code, preText, alt, "html", HL_STYLE)
+			if err != nil {
+				fmt.Printf("Error while highlight code: %s\n", err)
+			}
+			return code.String(), false
+		}
+		return fmt.Sprintf("<pre>%s</pre>", preText), false
 	}
 	return "", false
 }
