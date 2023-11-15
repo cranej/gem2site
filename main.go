@@ -5,8 +5,12 @@ import (
 	"fmt"
 	"git.sr.ht/~justinsantoro/gemtext"
 	"git.sr.ht/~justinsantoro/gemtext/ast"
-	"github.com/alecthomas/chroma/v2/quick"
+	"github.com/alecthomas/chroma/v2"
+	"github.com/alecthomas/chroma/v2/formatters/html"
+	"github.com/alecthomas/chroma/v2/lexers"
+	"github.com/alecthomas/chroma/v2/styles"
 	"html/template"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -14,7 +18,6 @@ import (
 )
 
 const GMI_EXT string = ".gmi"
-const HL_STYLE string = "github"
 
 // "/en/posts/xxxxx.gmi" -> "/en/posts/xxxxx.html"
 func urlReplace(link *ast.Link) {
@@ -25,6 +28,30 @@ func urlReplace(link *ast.Link) {
 
 func es(text string) string {
 	return template.HTMLEscapeString(text)
+}
+
+func highlight(writer io.Writer, source, lang, style string) error {
+	l := lexers.Get(lang)
+	if l == nil {
+		l = lexers.Analyse(source)
+	}
+	if l == nil {
+		l = lexers.Fallback
+	}
+	l = chroma.Coalesce(l)
+
+	f := html.New(html.Standalone(false))
+
+	s := styles.Get(style)
+	if s == nil {
+		s = styles.Fallback
+	}
+
+	it, err := l.Tokenise(nil, source)
+	if err != nil {
+		return err
+	}
+	return f.Format(writer, s, it)
 }
 
 func line2html(line ast.Line) (string, bool) {
@@ -54,9 +81,10 @@ func line2html(line ast.Line) (string, bool) {
 		return fmt.Sprintf("<blockquote><p>%s</p></blockquote>", es(string(v.Bytes()))), false
 	case *ast.Preformatted:
 		preText := string(v.Bytes())
-		if alt := v.AltText; alt != "" {
+		if alt := v.AltText; alt != "" && *codeHighlightStyle != "" {
 			var code strings.Builder
-			err := quick.Highlight(&code, preText, alt, "html", HL_STYLE)
+			// err := quick.Highlight(&code, preText, alt, "html", *codeHighlightStyle)
+			err := highlight(&code, preText, alt, *codeHighlightStyle)
 			if err != nil {
 				fmt.Printf("Error while highlight code: %s\n", err)
 			}
@@ -114,10 +142,7 @@ const defaultTemplate string = `<!DOCTYPE html>
   </body>
 </html>`
 
-const defaultCss string = `html {
-  font-size: 18px;
-}
-body {
+const defaultCss string = `body {
   color: #171717;
   font-family: 'Garamond', Georgia, serif, 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji';
 }
@@ -135,16 +160,26 @@ h1,h2,h3 {
 }
 
 pre {
-  background-color: #eee;
-  padding: .25rem 0.5rem;
-  margin: 0;
-  max-width: 100%;
-  overflow-x: auto;
+    background-color: #eee;
+    padding: 0.5rem 0.5rem;
+    margin: 25px 0;
+    max-width: 100%;
+    overflow-x: auto;
+    border: solid 1px lightgray;
+    border-radius: 4px;
+	font-size: 14px;
 }
 
 p {
   text-align: justify;
   margin: 0.25rem;
+}
+
+article > p:first-child > a {
+    text-decoration: none;
+    font-size: 200%;
+    font-weight: bold;
+    color: black;
 }
 `
 
@@ -216,8 +251,9 @@ func processFile(p string, tmplString string, externalCssFile string) []byte {
 }
 
 var externalTmpl = flag.String("tmpl", "", "path of external template file")
-var externalCss = flag.String("css", "", "value of href of <link> element")
+var externalCss = flag.String("css", "", "use external css file instead of internal default css. value should be urlPath of the external css file UrlPath, which will be used as value of href attribute of <link> element in head.")
 var dumpTmpl = flag.Bool("dump", false, "print default template and css, then exit")
+var codeHighlightStyle = flag.String("hl", "github", "code highlighting style, see https://github.com/alecthomas/chroma for details.  Default is 'github', pass empty string to disable code Highlighting.")
 
 func main() {
 	flag.Parse()
