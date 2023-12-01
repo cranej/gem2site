@@ -282,7 +282,6 @@ func main() {
 		tmpl = string(tmplBytes)
 	}
 
-	os.RemoveAll(dest)
 	filepath.Walk(src, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -292,6 +291,15 @@ func main() {
 			out := filepath.Join(dest, rel)
 			if path.Ext(out) == GMI_EXT {
 				out = strings.TrimSuffix(out, GMI_EXT) + ".html"
+			}
+			outStat, err := os.Stat(out)
+			if err != nil && !os.IsNotExist(err) {
+				fmt.Printf("Unable to check stat of target file %s, %s\n", out, err)
+				return err
+			}
+			if err == nil && outStat.ModTime().After(info.ModTime()) {
+				fmt.Printf("Skip target %s as already up to date.\n", out)
+				return nil
 			}
 			content := processFile(p, tmpl, *externalCss)
 			outputFile(out, content)
